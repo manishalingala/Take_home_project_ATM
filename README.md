@@ -1,5 +1,7 @@
 ATM Simulator (Client-side Demo)
 
+live website link : https://manishalingala.github.io/Take_home_project_ATM/
+
 Description:
 This is an interactive ATM Simulator built using HTML, CSS, and JavaScript. The simulator mimics the basic functionality of an ATM, allowing users to log in with demo accounts, check balances, withdraw and deposit money, change their PIN, and view transaction history.
 All operations are performed client-side using your browser’s memory (localStorage). This means no data is sent to a server, making it safe for testing and learning purposes.
