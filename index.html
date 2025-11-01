@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ATM Simulator — Demo</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#06b6d4;--muted:#94a3b8;--glass:rgba(255,255,255,0.03)}
+    *{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    body{margin:0;min-height:100vh;background:linear-gradient(180deg,#021026 0%, #081726 100%);color:#e6eef6;display:flex;align-items:center;justify-content:center;padding:24px}
+    .atm{width:960px;max-width:100%;display:grid;grid-template-columns:1fr 360px;gap:20px}
+    .screen{background:var(--card);padding:20px;border-radius:12px;box-shadow:0 6px 30px rgba(2,6,23,.6);}
+    .header{display:flex;align-items:center;justify-content:space-between}
+    .brand{font-weight:700;font-size:18px}
+    .sub{color:var(--muted);font-size:13px}
+    .panel{margin-top:18px}
+    .log{background:var(--glass);padding:12px;border-radius:8px;height:220px;overflow:auto}
+    .kbd{background:var(--glass);padding:12px;border-radius:8px;margin-top:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    button.key{padding:14px;border-radius:8px;border:0;background:transparent;color:var(--accent);font-weight:700;cursor:pointer}
+    .side{background:linear-gradient(180deg,rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:20px;border-radius:12px}
+    .field{display:flex;flex-direction:column;margin-bottom:12px}
+    label{font-size:13px;color:var(--muted);margin-bottom:6px}
+    input[type=text], input[type=password], input[type=number]{padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+    .menu{display:flex;gap:8px;margin-top:12px}
+    .btn{flex:1;padding:10px;border-radius:8px;border:0;background:var(--accent);color:#021026;font-weight:700;cursor:pointer}
+    .small{font-size:13px;color:var(--muted)}
+    .balance{font-size:28px;font-weight:700;margin-top:8px}
+    .transactions{margin-top:12px;max-height:160px;overflow:auto}
+    .tx{padding:8px;border-bottom:1px solid rgba(255,255,255,0.02);display:flex;justify-content:space-between}
+    footer{margin-top:12px;color:var(--muted);font-size:13px;text-align:center}
+    .warning{color:#ffb3b3}
+  </style>
+</head>
+<body>
+  <div class="atm">
+    <div class="screen">
+      <div class="header">
+        <div>
+          <div class="brand">ATM Simulator</div>
+          <div class="sub">Client-side demo — safe to test</div>
+        </div>
+        <div class="sub">Status: <span id="status">Not logged in</span></div>
+      </div>
+
+      <div class="panel">
+        <div class="log" id="log">
+          <div class="small">Welcome! Use the right panel to login with one of the demo accounts.</div>
+        </div>
+
+        <div class="kbd" id="keypad">
+          <button class="key" data-key="1">1</button>
+          <button class="key" data-key="2">2</button>
+          <button class="key" data-key="3">3</button>
+          <button class="key" data-key="4">4</button>
+          <button class="key" data-key="5">5</button>
+          <button class="key" data-key="6">6</button>
+          <button class="key" data-key="7">7</button>
+          <button class="key" data-key="8">8</button>
+          <button class="key" data-key="9">9</button>
+          <button class="key" data-key="C">C</button>
+          <button class="key" data-key="0">0</button>
+          <button class="key" data-key="E">Enter</button>
+        </div>
+      </div>
+
+      <footer>Demo intended for learning — all data is stored in your browser memory only.</footer>
+    </div>
+
+    <div class="side">
+      <div class="field">
+        <label>Account ID</label>
+        <input id="acctInput" type="text" placeholder="e.g. 1001" />
+      </div>
+      <div class="field">
+        <label>PIN (use keypad or type)</label>
+        <input id="pinInput" type="password" placeholder="••••" maxlength="6" />
+      </div>
+
+      <div class="menu">
+        <button class="btn" id="loginBtn">Login</button>
+        <button class="btn" id="resetBtn">Reset</button>
+      </div>
+
+      <div id="atmControls" style="display:none;margin-top:14px">
+        <div class="small">Logged in as <span id="who"></span></div>
+        <div class="balance" id="bal">$0.00</div>
+
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button class="btn" id="withdrawBtn">Withdraw</button>
+          <button class="btn" id="depositBtn">Deposit</button>
+        </div>
+
+        <div style="margin-top:8px;display:flex;gap:8px">
+          <button class="btn" id="changePinBtn">Change PIN</button>
+          <button class="btn" id="logoutBtn">Logout</button>
+        </div>
+
+        <div class="transactions" id="txList"></div>
+      </div>
+
+      <div style="margin-top:12px" class="small">
+        Tip: This is a client-only demo. You can open Developer Tools to inspect the pre-existing accounts in the JavaScript if you want to edit them.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const demoAccounts = [
+      {id: '1001', name: 'Alice R', pin: '1234', balance: 5000, tx: []},
+      {id: '1002', name: 'Bob S', pin: '2222', balance: 12500, tx: []},
+      {id: '1003', name: 'Chitra M', pin: '9999', balance: 300, tx: []}
+    ];
+
+    const STORAGE_KEY = 'atm_demo_accounts_v1';
+
+    function loadAccounts(){
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw){
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(demoAccounts));
+        return JSON.parse(JSON.stringify(demoAccounts));
+      }
+      try{return JSON.parse(raw);}catch(e){localStorage.setItem(STORAGE_KEY, JSON.stringify(demoAccounts));return JSON.parse(JSON.stringify(demoAccounts));}
+    }
+    function saveAccounts(data){ localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+
+    let accounts = loadAccounts();
+    let current = null;
+
+    const logEl = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+    const acctInput = document.getElementById('acctInput');
+    const pinInput = document.getElementById('pinInput');
+    const loginBtn = document.getElementById('loginBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const atmControls = document.getElementById('atmControls');
+    const whoEl = document.getElementById('who');
+    const balEl = document.getElementById('bal');
+    const txList = document.getElementById('txList');
+
+    function appendLog(text, cls){
+      const div = document.createElement('div'); div.textContent = text; if(cls) div.className = cls; logEl.appendChild(div); logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function setStatus(text){ statusEl.textContent = text; }
+
+    function findAccount(id){ return accounts.find(a=>a.id === id); }
+
+    function showAccountUI(){
+      whoEl.textContent = `${current.name} (${current.id})`;
+      balEl.textContent = `$${current.balance.toFixed(2)}`;
+      txList.innerHTML = '';
+      if(current.tx.length === 0){ txList.innerHTML = '<div class="small">No transactions yet.</div>'; }
+      else{
+        current.tx.slice().reverse().forEach(t=>{
+          const d=document.createElement('div'); d.className='tx'; d.innerHTML=`<div>${t.type}</div><div>$${t.amount.toFixed(2)}</div>`; txList.appendChild(d);
+        });
+      }
+      atmControls.style.display = 'block';
+    }
+
+    function logout(){ current = null; atmControls.style.display = 'none'; setStatus('Not logged in'); appendLog('User logged out'); }
+
+    loginBtn.addEventListener('click', ()=>{
+      const id = acctInput.value.trim(); const pin = pinInput.value.trim();
+      if(!id || !pin){ appendLog('Enter account ID and PIN.'); return; }
+      const acc = findAccount(id);
+      if(!acc){ appendLog('Account not found.'); return; }
+      if(acc.pin !== pin){ appendLog('Incorrect PIN.'); return; }
+      current = acc; setStatus('Logged in'); appendLog(`Logged in as ${acc.name} (${acc.id})`);
+      showAccountUI();
+    });
+
+    resetBtn.addEventListener('click', ()=>{
+      if(confirm('Reset demo data to initial values?')){
+        accounts = JSON.parse(JSON.stringify(demoAccounts)); saveAccounts(accounts); appendLog('Demo accounts reset.'); logout();
+      }
+    });
+
+    document.getElementById('withdrawBtn').addEventListener('click', ()=>{
+      if(!current) return; const amt = prompt('Enter amount to withdraw (numbers only)'); if(!amt) return; const num = Number(amt);
+      if(Number.isNaN(num) || num <= 0){ alert('Invalid amount'); return; }
+      if(num > current.balance){ alert('Insufficient funds'); return; }
+      current.balance -= num; current.tx.push({type:'Withdraw',amount:num}); saveAccounts(accounts); appendLog(`Withdrawal $${num.toFixed(2)} by ${current.id}`); showAccountUI();
+    });
+
+    document.getElementById('depositBtn').addEventListener('click', ()=>{
+      if(!current) return; const amt = prompt('Enter amount to deposit (numbers only)'); if(!amt) return; const num = Number(amt);
+      if(Number.isNaN(num) || num <= 0){ alert('Invalid amount'); return; }
+      current.balance += num; current.tx.push({type:'Deposit',amount:num}); saveAccounts(accounts); appendLog(`Deposit $${num.toFixed(2)} by ${current.id}`); showAccountUI();
+    });
+
+    document.getElementById('changePinBtn').addEventListener('click', ()=>{
+      if(!current) return; const oldp = prompt('Enter current PIN'); if(!oldp) return; if(oldp !== current.pin){ alert('Wrong current PIN'); return; }
+      const newp = prompt('Enter new PIN (4-6 digits)'); if(!newp) return; if(!/^\d{4,6}$/.test(newp)){ alert('PIN must be 4-6 digits'); return; }
+      current.pin = newp; saveAccounts(accounts); appendLog(`PIN changed for ${current.id}`); alert('PIN changed successfully');
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', ()=>{ logout(); });
+
+    document.getElementById('keypad').addEventListener('click', (e)=>{
+      const k = e.target.dataset.key; if(!k) return; if(k === 'C'){ pinInput.value = ''; return; }
+      if(k === 'E'){ loginBtn.click(); return; }
+      if(pinInput.value.length < 6) pinInput.value += k;
+    });
+
+    window.addEventListener('storage', ()=>{ accounts = loadAccounts(); if(current){ current = findAccount(current.id); if(!current) logout(); else showAccountUI(); } });
+
+    accounts = loadAccounts();
+    appendLog('ATM demo ready. Use right panel to login.');
+    console.log('Demo accounts (id, name):', accounts.map(a=>[a.id,a.name]));
+  </script>
+</body>
+</html>
